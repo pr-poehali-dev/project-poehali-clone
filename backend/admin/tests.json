@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "name": "Get all users",
+      "method": "GET",
+      "path": "/?action=users",
+      "headers": {
+        "X-Admin-Id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "users": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Update user energy",
+      "method": "POST",
+      "path": "/",
+      "headers": {
+        "X-Admin-Id": "1"
+      },
+      "body": {
+        "action": "updateEnergy",
+        "userId": "1",
+        "amount": 50,
+        "description": "Test bonus"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": "boolean"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

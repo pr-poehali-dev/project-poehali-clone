@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,13 +7,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
+import AdminPanel from '@/components/AdminPanel';
 
 interface User {
+  id: number;
   email: string;
   username: string;
   energy: number;
   isAdmin: boolean;
 }
+
+const AUTH_API = 'https://functions.poehali.dev/0168edc9-a6a0-48e1-82ac-7b4db1fc1e31';
 
 const Index = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -25,54 +29,103 @@ const Index = () => {
   const [registerPassword, setRegisterPassword] = useState('');
   const [activeSection, setActiveSection] = useState('home');
 
-  const handleLogin = () => {
-    if (loginEmail === 'den.nazarenko.02@internet.ru' && loginPassword === 'asddsa111') {
-      setUser({
-        email: loginEmail,
-        username: 'Yehali',
-        energy: Infinity,
-        isAdmin: true
+  const handleLogin = async () => {
+    if (!loginEmail || !loginPassword) {
+      toast.error('Заполните все поля');
+      return;
+    }
+
+    try {
+      const response = await fetch(AUTH_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'login',
+          email: loginEmail,
+          password: loginPassword
+        })
       });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || 'Ошибка входа');
+        return;
+      }
+
+      setUser(data);
       setIsLoggedIn(true);
-      toast.success('Добро пожаловать, Админ!');
-    } else {
-      const mockUser = {
-        email: loginEmail,
-        username: loginEmail.split('@')[0],
-        energy: 100,
-        isAdmin: false
-      };
-      setUser(mockUser);
-      setIsLoggedIn(true);
-      toast.success('Вход выполнен успешно!');
+      localStorage.setItem('user', JSON.stringify(data));
+      toast.success(data.isAdmin ? 'Добро пожаловать, Админ!' : 'Вход выполнен успешно!');
+      setLoginEmail('');
+      setLoginPassword('');
+    } catch (error) {
+      toast.error('Ошибка подключения к серверу');
+      console.error(error);
     }
   };
 
-  const handleRegister = () => {
-    if (registerEmail === 'den.nazarenko.02@internet.ru') {
-      setUser({
-        email: registerEmail,
-        username: 'Yehali',
-        energy: 100000,
-        isAdmin: true
-      });
-    } else {
-      setUser({
-        email: registerEmail,
-        username: registerUsername,
-        energy: 100,
-        isAdmin: false
-      });
+  const handleRegister = async () => {
+    if (!registerEmail || !registerUsername || !registerPassword) {
+      toast.error('Заполните все поля');
+      return;
     }
-    setIsLoggedIn(true);
-    toast.success('Регистрация прошла успешно! Получено 100 энергии 🎉');
+
+    try {
+      const response = await fetch(AUTH_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'register',
+          email: registerEmail,
+          username: registerUsername,
+          password: registerPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || 'Ошибка регистрации');
+        return;
+      }
+
+      setUser(data);
+      setIsLoggedIn(true);
+      localStorage.setItem('user', JSON.stringify(data));
+      toast.success(`Регистрация прошла успешно! Получено ${data.energy} энергии 🎉`);
+      setRegisterEmail('');
+      setRegisterUsername('');
+      setRegisterPassword('');
+    } catch (error) {
+      toast.error('Ошибка подключения к серверу');
+      console.error(error);
+    }
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUser(null);
+    localStorage.removeItem('user');
     toast.info('Вы вышли из системы');
   };
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try {
+        const userData = JSON.parse(savedUser);
+        setUser(userData);
+        setIsLoggedIn(true);
+      } catch (error) {
+        console.error('Failed to parse saved user', error);
+      }
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-card">
@@ -92,6 +145,9 @@ const Index = () => {
             <button onClick={() => setActiveSection('portfolio')} className="hover:text-primary transition-colors">Портфолио</button>
             <button onClick={() => setActiveSection('blog')} className="hover:text-primary transition-colors">Блог</button>
             <button onClick={() => setActiveSection('contact')} className="hover:text-primary transition-colors">Контакты</button>
+            {user?.isAdmin && (
+              <button onClick={() => setActiveSection('admin')} className="hover:text-accent transition-colors font-bold">Админка</button>
+            )}
           </nav>
 
           <div className="flex items-center gap-3">
@@ -99,7 +155,7 @@ const Index = () => {
               <div className="flex items-center gap-3">
                 <Badge variant="secondary" className="text-sm">
                   <Icon name="Zap" size={14} className="mr-1" />
-                  {user.energy === Infinity ? '∞' : user.energy} энергии
+                  {user.energy.toLocaleString()} энергии
                 </Badge>
                 {user.isAdmin && (
                   <Badge className="bg-accent text-accent-foreground">Admin</Badge>
@@ -127,9 +183,18 @@ const Index = () => {
                       <div>
                         <p className="text-sm text-muted-foreground">Энергия</p>
                         <p className="font-medium text-2xl text-primary">
-                          {user.energy === Infinity ? '∞' : user.energy}
+                          {user.energy.toLocaleString()}
                         </p>
                       </div>
+                      {user.isAdmin && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Роль</p>
+                          <Badge className="bg-accent mt-1">
+                            <Icon name="Shield" size={14} className="mr-1" />
+                            Администратор
+                          </Badge>
+                        </div>
+                      )}
                       <Button onClick={handleLogout} variant="destructive" className="w-full">
                         Выйти
                       </Button>
@@ -499,6 +564,12 @@ const Index = () => {
             </div>
           </Card>
         </section>
+
+        {activeSection === 'admin' && user?.isAdmin && (
+          <section className="container mx-auto px-4 py-20 animate-fade-in">
+            <AdminPanel adminUserId={user.id} />
+          </section>
+        )}
       </main>
 
       <footer className="border-t border-border py-8 mt-20">
